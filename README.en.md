@@ -41,8 +41,8 @@ original firmware later:
 esptool.py --port /dev/ttyUSB0 write_flash 0 esp_stock_backup.bin
 ```
 
-> The physical pin tap, download mode and board photos go in the hardware
-> documentation (coming soon).
+> The physical details (board photo, Smart connector, pin tap and download mode)
+> are in [`docs/hardware.en.md`](docs/hardware.en.md).
 
 ## How it works (software)
 

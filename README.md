@@ -41,8 +41,8 @@ restaurar el firmware original más adelante:
 esptool.py --port /dev/ttyUSB0 write_flash 0 esp_stock_backup.bin
 ```
 
-> El detalle físico del tap de pines, el modo descarga y las fotos de la placa van
-> en la documentación de hardware (próximamente).
+> El detalle físico (foto de la placa, conector Smart, tap de pines y modo
+> descarga) está en [`docs/hardware.md`](docs/hardware.md).
 
 ## Cómo funciona (software)
 
