@@ -121,6 +121,12 @@ improve? You're welcome: **open an issue** to report a problem, ask a question o
 share frame captures from another model, or **send a pull request** with your
 changes. Every contribution helps more people move their gate to local control.
 
+## Acknowledgements
+
+To [BenJamesAndo/XHouse-IoT-Controller](https://github.com/BenJamesAndo/XHouse-IoT-Controller),
+my first entry point with this board and the starting point for understanding the
+protocol.
+
 ## License
 
 [MIT](LICENSE).

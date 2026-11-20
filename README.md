@@ -120,6 +120,12 @@ pregunta o compartir capturas de tramas de otro modelo, o **mandá un pull
 request** con tus cambios. Todo aporte suma para que más gente pueda pasar su
 portón a local.
 
+## Agradecimientos
+
+A [BenJamesAndo/XHouse-IoT-Controller](https://github.com/BenJamesAndo/XHouse-IoT-Controller),
+mi primer punto de entrada con esta placa y el punto de partida para entender el
+protocolo.
+
 ## Licencia
 
 [MIT](LICENSE).
