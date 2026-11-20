@@ -1,0 +1,6 @@
+# Secretos reales (WiFi, claves de API). Nunca subir.
+secrets.yaml
+
+# Build de ESPHome
+.esphome/
+*.bin

@@ -1,0 +1,215 @@
+# ─────────────────────────────────────────────────────────────────────────
+# Portón XHouse EGA1800 — ESPHome para el módulo ESP32-C2 (ESPC2-12)
+#
+# Reemplaza el firmware stock del módulo "Smart" (WiFi+BLE) y habla con el STM32
+# de la placa por UART. Control 100% local, sin la nube del fabricante.
+#
+# El detalle del protocolo (tramas, bytes, estados) está en docs/protocolo-uart.md
+#
+# ANTES DE FLASHEAR: hacé un backup del firmware stock del ESP (ver README.md).
+#
+# Cómo usar:
+#   1. Copialo como `esp-ega1800.yaml`.
+#   2. Copiá `secrets.yaml.example` como `secrets.yaml` y completá tus datos.
+#   3. Compilá y flasheá con ESPHome (ver README.md).
+#
+# Pinout del módulo:  GPIO6 -> TX (a PA10/RX del STM32) · GPIO7 <- RX (de PA9/TX
+# del STM32) · GPIO10 -> LED Smart.
+# ─────────────────────────────────────────────────────────────────────────
+
+esphome:
+  name: esp-ega1800
+  friendly_name: Portón
+  on_boot:
+    # Al iniciar, pedir modelo/firmware al STM32 (puebla los sensores de texto).
+    priority: -100
+    then:
+      - delay: 3s
+      - repeat:
+          count: 3
+          then:
+            - uart.write: { id: gate_uart, data: [0x55, 0xAA, 0x2E] }
+            - delay: 1s
+
+esp32:
+  board: esp32-c2-devkitm-1
+  variant: esp32c2
+  flash_size: 2MB
+  framework:
+    type: esp-idf
+    advanced:
+      flash_chip: generic
+    sdkconfig_options:
+      # El ESPC2-12 lleva cristal de 26 MHz (no el típico de 40 MHz). Sin esto
+      # el WiFi no engancha y la UART queda a baud equivocado.
+      CONFIG_XTAL_FREQ_26: "y"
+      CONFIG_XTAL_FREQ_AUTO: "n"
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  power_save_mode: none        # el C2 tiene 1 core; el power-save corta la UART
+
+api:
+  encryption:
+    key: !secret api_encryption_key
+
+ota:
+  - platform: esphome
+    encryption:
+
+logger:
+  level: INFO
+  # Para depurar la UART subí a DEBUG y descomentá el log_hex del parser de abajo.
+
+# ── UART hacia el STM32 (115200 8N1) ────────────────────────────────────────
+uart:
+  id: gate_uart
+  tx_pin: GPIO6
+  rx_pin: GPIO7
+  baud_rate: 115200
+  debug:
+    direction: BOTH
+    dummy_receiver: true
+    after:
+      timeout: 50ms
+    sequence:
+      # Parsea las tramas 55 AA que llegan del STM32. Ver docs/protocolo-uart.md
+      # para el significado de cada byte.
+      - lambda: |-
+          UARTDebug::log_hex(direction, bytes, ' ');   // visible sólo en DEBUG
+          if (direction != UART_DIRECTION_RX || bytes.size() < 4) return;
+          if (bytes[0] != 0x55 || bytes[1] != 0xAA) return;
+          uint8_t t = bytes[2];
+
+          // --- Respuesta de modelo/firmware: 55 AA 2E {json} ---
+          if (t == 0x2E) {
+            std::string js(bytes.begin() + 3, bytes.end());
+            auto field = [&](const char *k) -> std::string {
+              std::string key = std::string("\"") + k + "\":\"";
+              size_t p = js.find(key);
+              if (p == std::string::npos) return std::string();
+              p += key.size();
+              size_t e = js.find('"', p);
+              return e == std::string::npos ? std::string() : js.substr(p, e - p);
+            };
+            std::string ty = field("type");
+            std::string ver = field("version");
+            if (!ty.empty())  id(info_modelo).publish_state(ty);
+            if (!ver.empty()) id(info_firmware).publish_state(ver);
+            return;
+          }
+
+          // --- Estado: poll (55 AA 32) o evento (55 AA 41) ---
+          if ((t == 0x32 || t == 0x41) && bytes.size() >= 17) {
+            float v = ((bytes[8] << 8) | bytes[9]) / 1000.0f;
+            uint8_t sa = bytes[4];               // estado hoja A (posición = byte[15])
+            uint8_t sb = bytes[5];               // estado hoja B (posición = byte[16])
+            uint8_t pa = bytes[15];              // % hoja A
+            uint8_t pb = bytes[16];              // % hoja B
+            bool present = bytes[14] != 0;
+
+            id(bat_v).publish_state(v);
+            id(bat_present).publish_state(present);
+
+            // Posición del cover = promedio de las dos hojas (100% con ambas abiertas).
+            id(porton_cover).position = (pa + pb) / 200.0f;
+
+            // 0x01=abriendo, 0x00=cerrando, 0x02=abierto, 0x03=cerrado.
+            // Abriendo/cerrando si alguna hoja lo está (con guarda de posición).
+            bool opening = (sa == 0x01 && pa < 100) || (sb == 0x01 && pb < 100);
+            bool closing = (sa == 0x00 && pa > 0)   || (sb == 0x00 && pb > 0);
+            if (opening)
+              id(porton_cover).current_operation = cover::COVER_OPERATION_OPENING;
+            else if (closing)
+              id(porton_cover).current_operation = cover::COVER_OPERATION_CLOSING;
+            else
+              id(porton_cover).current_operation = cover::COVER_OPERATION_IDLE;
+            id(porton_cover).publish_state();
+          }
+
+# ── Botones de pulsación ────────────────────────────────────────────────────
+button:
+  # Canal 1: peatonal (mueve una sola hoja)
+  - platform: template
+    name: "Peatonal"
+    icon: "mdi:walk"
+    on_press:
+      - uart.write: { id: gate_uart, data: [0x55, 0xAA, 0x01, 0x01, 0x02] }
+
+  # Canal 2: portón completo (ambas hojas)
+  - platform: template
+    id: pulso_porton
+    name: "Vehículo"
+    icon: "mdi:car"
+    on_press:
+      - uart.write: { id: gate_uart, data: [0x55, 0xAA, 0x01, 0x02, 0x02] }
+
+# ── Portón completo (cover) ──────────────────────────────────────────────────
+cover:
+  - platform: template
+    id: porton_cover
+    name: None
+    device_class: gate
+    optimistic: false         # el estado real lo publica el parser UART
+    # El control del STM32 es PASO A PASO (abrir->parar->cerrar con cada pulso),
+    # igual que el control remoto. Estas guardas pulsan sólo cuando corresponde,
+    # para que abrir/cerrar/parar de HA hagan lo esperado.
+    open_action:
+      - if:
+          condition:
+            lambda: 'return id(porton_cover).current_operation != cover::COVER_OPERATION_OPENING && id(porton_cover).position < 0.99f;'
+          then:
+            - button.press: pulso_porton
+    close_action:
+      - if:
+          condition:
+            lambda: 'return id(porton_cover).current_operation != cover::COVER_OPERATION_CLOSING && id(porton_cover).position > 0.01f;'
+          then:
+            - button.press: pulso_porton
+    stop_action:
+      - if:
+          condition:
+            lambda: 'return id(porton_cover).current_operation == cover::COVER_OPERATION_OPENING || id(porton_cover).current_operation == cover::COVER_OPERATION_CLOSING;'
+          then:
+            - button.press: pulso_porton
+
+# ── Sensores de información ─────────────────────────────────────────────────
+text_sensor:
+  - platform: template
+    id: info_modelo
+    name: "Modelo"
+    icon: "mdi:gate"
+  - platform: template
+    id: info_firmware
+    name: "Firmware"
+    icon: "mdi:chip"
+
+# ── Batería de respaldo (24V) ───────────────────────────────────────────────
+sensor:
+  - platform: template
+    id: bat_v
+    name: "Batería"
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 2
+
+binary_sensor:
+  - platform: template
+    id: bat_present
+    name: "Batería presente"
+    icon: "mdi:car-battery"
+
+# ── LED Smart ────────────────────────────────────────────────────────────────
+status_led:
+  pin:
+    number: GPIO10
+
+# ── Poll periódico del estado ────────────────────────────────────────────────
+# IMPORTANTE: el STM32 queda MUDO hasta que se lo sondea. Sin este poll no hay
+# estado ni batería en Home Assistant.
+interval:
+  - interval: 3s
+    then:
+      - uart.write: { id: gate_uart, data: [0x55, 0xAA, 0x32] }
