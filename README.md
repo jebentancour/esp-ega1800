@@ -120,6 +120,10 @@ pregunta o compartir capturas de tramas de otro modelo, o **mandá un pull
 request** con tus cambios. Todo aporte suma para que más gente pueda pasar su
 portón a local.
 
+## Licencia
+
+[MIT](LICENSE).
+
 ## Descargo de responsabilidad
 
 Esto implica reflashear hardware que controla un portón motorizado. Lo hacés bajo

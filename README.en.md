@@ -121,6 +121,10 @@ improve? You're welcome: **open an issue** to report a problem, ask a question o
 share frame captures from another model, or **send a pull request** with your
 changes. Every contribution helps more people move their gate to local control.
 
+## License
+
+[MIT](LICENSE).
+
 ## Disclaimer
 
 This involves reflashing hardware that controls a motorized gate. You do it at your
