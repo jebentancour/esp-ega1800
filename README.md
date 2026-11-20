@@ -1,5 +1,7 @@
 # Portón XHouse EGA1800 → local con ESPHome
 
+*English: [README.en.md](README.en.md)*
+
 Convierte un portón batiente **XHouse EGA1800** (placa `EGA-18`, "WiFi+BLE Swing
 Gate") de un dispositivo **dependiente de la nube** a uno **100% local**,
 controlado desde Home Assistant con [ESPHome](https://esphome.io).

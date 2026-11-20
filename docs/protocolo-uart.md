@@ -1,5 +1,7 @@
 # Protocolo UART STM32 ↔ módulo Smart (EGA1800)
 
+*English: [protocol-uart.en.md](protocol-uart.en.md)*
+
 Este es el protocolo que habla el firmware de ESPHome con el STM32 de la placa.
 Entenderlo sirve para adaptar el YAML a otra variante del portón o para depurar.
 Todo esto se obtuvo por ingeniería inversa (firmware del STM32 y del ESP stock) y
